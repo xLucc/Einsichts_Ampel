@@ -2,8 +2,8 @@
 #include <timer.h>
 #include <FastLED.h>
 
-#define DATA_PIN 6
-#define BRIGHTNESS 100
+#define DATA_PIN 4
+#define BRIGHTNESS 10
 #define NUM_LEDS 64
 #define NUM_ROWS 8
 #define NUM_COLS 8
@@ -16,6 +16,8 @@ void led_setup()
 {
     FastLED.addLeds<WS2812B, DATA_PIN, GRB>(leds, NUM_LEDS);
     FastLED.setBrightness(BRIGHTNESS);
+    FastLED.clear();
+    FastLED.show();
 }
 
 // This function iterates over all available LEDs and assigns each one the color
@@ -64,13 +66,64 @@ void show_color_identifier(RGBColor color, RGBColor identifier)
     }
 }
 
+//
 void show_color_wave(RGBColor color)
 {
-    // Create a wave effect by moving the color across the LEDs
-    for (int i = 0; i < NUM_LEDS; i++)
+    const int waveSize = 8;
+    const unsigned long waveDelay = 50; // milliseconds
+
+    int numWaves = NUM_LEDS / waveSize;
+
+    for (int wave = 0; wave < numWaves; wave++)
     {
-        leds[i] = CRGB(color.r, color.g, color.b);
+        // Clear all LEDs
+        FastLED.clear();
+
+        // Light up the current wave of 8 LEDs (full color)
+        for (int i = 0; i < waveSize; i++)
+        {
+            int idx = wave * waveSize + i;
+            if (idx < NUM_LEDS)
+            {
+                leds[idx] = CRGB(color.r, color.g, color.b);
+            }
+        }
+
+        // Blur before (previous 8 LEDs)
+        for (int i = 1; i <= waveSize; i++)
+        {
+            int idx = wave * waveSize - i;
+            if (idx >= 0)
+            {
+                // Fade out: linear fade, more distant = dimmer
+                uint8_t fade = map(i, 1, waveSize, 180, 10); // 180 (close) to 10 (far)
+                leds[idx] = CRGB(
+                    (color.r * fade) / 255,
+                    (color.g * fade) / 255,
+                    (color.b * fade) / 255);
+            }
+        }
+
+        // Blur after (next 8 LEDs)
+        for (int i = 1; i <= waveSize; i++)
+        {
+            int idx = wave * waveSize + waveSize - 1 + i;
+            if (idx < NUM_LEDS)
+            {
+                uint8_t fade = map(i, 1, waveSize, 180, 10);
+                leds[idx] = CRGB(
+                    (color.r * fade) / 255,
+                    (color.g * fade) / 255,
+                    (color.b * fade) / 255);
+            }
+        }
+
         FastLED.show();
-        leds[i] = CRGB::Black;
+
+        unsigned long startDelay = millis();
+        while (millis() - startDelay < waveDelay)
+        {
+            yield();
+        }
     }
 }

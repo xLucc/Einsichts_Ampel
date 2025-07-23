@@ -1,5 +1,4 @@
-#include <FastLED.h>
-#include <time.h>
+#include <timer.h>
 
 void led_setup();
 void show_color(RGBColor);

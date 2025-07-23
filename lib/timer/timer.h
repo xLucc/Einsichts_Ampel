@@ -1,3 +1,4 @@
+#pragma once
 #include <Arduino.h>
 #include <array>
 enum class TimerState
@@ -13,15 +14,15 @@ struct RGBColor
 
     bool operator!=(const RGBColor &other) const
     {
-        return r != other.r && g != other.g && b != other.b;
+        return r != other.r || g != other.g || b != other.b;
     }
 };
 
 class Timer
 {
 public:
-    Timer(uint32_t, CRGB *, uint16_t);
-    void start(uint32_t);
+    Timer(uint32_t);
+    void start();
     void pause(RGBColor);
     void resume(RGBColor);
     void tick();
@@ -29,9 +30,10 @@ public:
     void stop();
 
 private:
-    TimerState state;
-    uint32_t endMillis;
-    uint32_t remainingMilllis;
-    RGBColor lastLedColor;
+    TimerState state = TimerState::IDLE;
+    uint32_t endMillis = 0;
+    uint32_t remainingMilllis = 0;
+    RGBColor lastLedColor = {0, 0, 0};
+    uint32_t max_duration;
     RGBColor calcColor(uint32_t);
 };

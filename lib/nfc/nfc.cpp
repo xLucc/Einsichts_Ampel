@@ -3,10 +3,11 @@
 #include <Adafruit_PN532.h>
 #include <timer.h>
 
-#define SDA_PIN 4
-#define SCL_PIN 5
+#define SDA_PIN 6
+#define SCL_PIN 7
 #define Sektor 2
-#define DURATION 1200000 // 20 minutes in milliseconds
+#define DURATION 60000 // 1 minute in milliseconds
+#define TIMEOUT 80     // 80 milliseconds timeout for NFC operations
 uint8_t firstBlock;
 
 struct UID
@@ -45,7 +46,7 @@ UID wildCard;
 uint8_t uid[7], uidLen;
 uint8_t KEY_A[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 uint8_t data[16];
-Timer timer;
+Timer timer(DURATION);
 Command cmd;
 
 void nfc_setup()
@@ -54,21 +55,30 @@ void nfc_setup()
     nfc.begin();
     nfc.SAMConfig();
     firstBlock = Sektor * 4; // Assuming each sector has 4 blocks
+    Serial.begin(115200);
 }
 
 void nfc_loop()
 {
-    // Check if a card is present, and read its UID.
-    if (nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLen))
+    static uint32_t lastCycle = 0;
+    const uint32_t cycleTime = 350; // milliseconds between NFC reads
+
+    uint32_t now = millis();
+    if (now - lastCycle >= cycleTime)
     {
-        // Handle the wildcard logic.
-        handleWildCard();
-        // Read the first data block from the card.
-        readDataBlock();
-        memcpy(&cmd, data, sizeof(cmd));
-        exec();
-        timer.tick();
+        lastCycle = now;
+        // Check if a card is present, and read its UID.
+        if (nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLen, TIMEOUT))
+        {
+            // Handle the wildcard logic.
+            handleWildCard();
+            // Read the first data block from the card.
+            readDataBlock();
+            memcpy(&cmd, data, sizeof(cmd));
+            exec();
+        }
     }
+    timer.tick();
 }
 
 // @todo add error handling for the case where the card is not readable, so if max retries are reached.
@@ -103,7 +113,7 @@ void handleWildCard()
         {
             wildCard.uidLen = uidLen;
             memcpy(wildCard.uid, uid, uidLen);
-            timer.start(DURATION);
+            timer.start();
         }
         // If the wildcard is set, check if it matches the current uid.
         // Stop the timer if it matches.

@@ -15,4 +15,5 @@ void setup()
 
 void loop()
 {
+    nfc_loop();
 }

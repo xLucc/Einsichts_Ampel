@@ -2,6 +2,7 @@ void nfc_setup();
 void nfc_loop();
 void readDataBlock();
 void resetWildCard();
-void handleWildCard();
+bool myHandleWildCard();
 bool isWildCard();
 void exec();
+bool kill_timer();

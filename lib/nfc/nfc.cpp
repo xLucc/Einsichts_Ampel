@@ -2,13 +2,16 @@
 #include <Wire.h>
 #include <Adafruit_PN532.h>
 #include <timer.h>
+#include <led.h>
 
 #define SDA_PIN 6
 #define SCL_PIN 7
+#define RESET 5
 #define Sektor 2
 #define DURATION 60000 // 1 minute in milliseconds
-#define TIMEOUT 80     // 80 milliseconds timeout for NFC operations
+#define TIMEOUT 200    // 200 milliseconds timeout for NFC operations
 uint8_t firstBlock;
+bool compareUID(uint8_t *uid1, uint8_t len1, uint8_t *uid2, uint8_t len2);
 
 struct UID
 {
@@ -40,7 +43,7 @@ struct Command
     uint8_t reserved[4]; // Reserved for future use.
 };
 
-Adafruit_PN532 nfc(SDA_PIN, SCL_PIN);
+Adafruit_PN532 nfc(-1, RESET, &Wire);
 
 UID wildCard;
 uint8_t uid[7], uidLen;
@@ -52,6 +55,11 @@ Command cmd;
 void nfc_setup()
 {
     Wire.begin(SDA_PIN, SCL_PIN);
+    pinMode(RESET, OUTPUT);
+    digitalWrite(RESET, LOW);
+    delay(10);
+    digitalWrite(RESET, HIGH);
+    delay(10);
     nfc.begin();
     nfc.SAMConfig();
     firstBlock = Sektor * 4; // Assuming each sector has 4 blocks
@@ -61,22 +69,29 @@ void nfc_setup()
 void nfc_loop()
 {
     static uint32_t lastCycle = 0;
-    const uint32_t cycleTime = 350; // milliseconds between NFC reads
+    const uint32_t cycleTime = 200; // milliseconds between NFC reads
 
     uint32_t now = millis();
     if (now - lastCycle >= cycleTime)
     {
         lastCycle = now;
+        nfc.reset();
+
         // Check if a card is present, and read its UID.
         if (nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLen, TIMEOUT))
         {
+            Serial.println("If this does not show up, i2c is working.");
             // Handle the wildcard logic.
-            handleWildCard();
-            // Read the first data block from the card.
-            readDataBlock();
-            memcpy(&cmd, data, sizeof(cmd));
-            exec();
+            if (!myHandleWildCard())
+            {
+                // Read the first data block from the card.
+                readDataBlock();
+                memcpy(&cmd, data, sizeof(cmd));
+                exec();
+            }
         }
+
+        Serial.println("If this is the only thing that shows up, i2c does not work.");
     }
     timer.tick();
 }
@@ -102,7 +117,7 @@ void resetWildCard()
     wildCard.uidLen = 0;
 }
 
-void handleWildCard()
+bool myHandleWildCard()
 {
     // Check if the card is a wildcard
     if (isWildCard())
@@ -111,23 +126,30 @@ void handleWildCard()
         // Start the timer for DURATION.
         if (wildCard.uidLen == 0)
         {
+            Serial.println("Case 1");
             wildCard.uidLen = uidLen;
             memcpy(wildCard.uid, uid, uidLen);
             timer.start();
+            return true;
         }
         // If the wildcard is set, check if it matches the current uid.
         // Stop the timer if it matches.
-        else if (wildCard.uid == uid)
+        if (compareUID(wildCard.uid, wildCard.uidLen, uid, uidLen))
         {
+            Serial.println("Case 2");
             resetWildCard();
             timer.stop();
+            return true;
         }
         // If the wildcard is set but does not match, return.
         else
         {
-            return;
+            Serial.println("Case 3");
+            return true;
         }
     }
+
+    return false;
 }
 
 bool isWildCard()
@@ -150,5 +172,40 @@ void exec()
         break;
     default:
         break;
+    }
+}
+
+bool compareUID(uint8_t *uid1, uint8_t len1, uint8_t *uid2, uint8_t len2)
+{
+    if (len1 != len2)
+        return false;
+    for (uint8_t i = 0; i < len1; i++)
+    {
+        if (uid1[i] != uid2[i])
+            return false;
+    }
+    return true;
+}
+
+bool kill_timer()
+{
+    static uint32_t lastCycle = 0;
+    const uint32_t cycleTime = 100; // milliseconds between NFC reads
+
+    uint32_t now = millis();
+    if (now - lastCycle >= cycleTime)
+    {
+        lastCycle = now;
+        nfc.reset();
+
+        // Check if a card is present, and read its UID.
+        if (nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLen, TIMEOUT))
+        {
+            // Handle the wildcard logic.
+            if (isWildCard)
+            {
+                return compareUID(wildCard.uid, wildCard.uidLen, uid, uidLen);
+            }
+        }
     }
 }

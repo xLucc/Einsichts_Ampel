@@ -1,6 +1,6 @@
 #include <timer.h>
 #include <led.h>
-
+#include <nfc.h>
 // Constructor initializes timer with maximum duration and LED array.
 Timer::Timer(uint32_t max_duration)
 {
@@ -13,7 +13,7 @@ void Timer::start()
     state = TimerState::RUNNING;
     endMillis = millis() + max_duration;
     RGBColor color = calcColor(max_duration);
-    RGBColor identifier = {0, 255, 0};
+    RGBColor identifier = {0, 0, 255};
     show_color_wave(identifier);
     show_color(color);
 }
@@ -73,8 +73,17 @@ void Timer::tick()
 
     if (left == 0)
     {
-        stop();
-        state = TimerState::IDLE;
+        before_stop();
+    }
+}
+
+void Timer::before_stop()
+{
+    bool killed = false;
+    while (!killed)
+    {
+        show_color_identifier({255, 255, 0}, {0, 255, 255});
+        killed = kill_timer();
     }
 }
 
@@ -83,9 +92,10 @@ void Timer::stop()
     state = TimerState::IDLE;
     endMillis = 0;
     remainingMilllis = 0;
-    show_color_wave({255, 0, 0});
-    lastLedColor = {0, 0, 0};
-    show_color(lastLedColor);
+    show_color_bi_wave({255, 0, 0});
+    show_color_identifier({255, 0, 0}, {0, 0, 255});
+    clear_leds();
+    resetWildCard();
 }
 
 // Calculates LED color based on remaining time.

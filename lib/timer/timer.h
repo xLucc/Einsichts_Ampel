@@ -28,6 +28,7 @@ public:
     void tick();
     void add(uint32_t, RGBColor);
     void stop();
+    void before_stop();
 
 private:
     TimerState state = TimerState::IDLE;
